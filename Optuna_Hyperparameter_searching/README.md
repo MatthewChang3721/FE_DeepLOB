@@ -1,6 +1,6 @@
-# 基于 FE_DeepLOB 与 Optuna 的股指期货高频方向预测
+# 基于 FE_DeepLOB 与 Optuna 的期货高频方向预测
 
-本项目利用高频限价订单簿（LOB）数据，使用带特征工程的 DeepLOB 神经网络模型（FE_DeepLOB）预测中证1000股指期货（IM）短期价格方向（上涨/下跌/持平），并通过 **Optuna** 贝叶斯优化自动搜索最优超参数组合，提升模型在指定评价指标（Down & Up PR-AUC 之和）上的表现。
+本项目利用高频限价订单簿（LOB）数据，使用带特征工程的 DeepLOB 神经网络模型（FE_DeepLOB）预测期货（IM）短期价格方向（上涨/下跌/持平），并通过 **Optuna** 贝叶斯优化自动搜索最优超参数组合，提升模型在指定评价指标（Down & Up PR-AUC 之和）上的表现。
 
 ---
 
@@ -13,7 +13,8 @@
 | 参数 | 默认值 | 含义 |
 |------|:---:|------|
 | **数据路径** | | |
-| `copy_data_path` | `"T:/microvast-zx_920/Future/INE/sc"` | 原始数据远程路径 |
+| `copy_data_path` | `/yourdatabase
+` | 原始数据远程路径 |
 | `fetch_file_path` | `"Data/SC_Primary.csv"` | 拉取的中间文件路径 |
 | `raw_data_path` | `"Data/Raw_data/"` | 原始 LOB CSV 目录 |
 | `processed_data_path` | `"Data/FE_DeepLOB_data/Processed_data/"` | 特征工程后的临时数据目录 |
@@ -64,28 +65,7 @@
 
 #### `process_data(inputfile, outputfile, label_method, label_window, alpha)`
 
-对单日原始 LOB CSV 文件进行特征工程和标签生成，处理后保存到指定路径。**始终启用特征工程（不再支持非FE模式）。**
-
-**特征工程：**
-- **MidPrice_diff**：MidPrice 对数一阶差分（×10000 以基点表示）
-- **Bid_G1~5 / Ask_G1~5（价格引力）**：替代原有的微观价格（price_micro）。计算公式：
-
-  ```
-  Bid_G(level) = bidSize_level / ((MidPrice - bidPrice_level)² + ε)
-  Ask_G(level) = -askSize_level / ((MidPrice - askPrice_level)² + ε)
-  ```
-
-  该特征衡量各档位订单在 MidPrice 附近的价格"引力"——距离 MidPrice 越近且挂单量越大的档位影响力越大，能更敏感地捕捉盘口微结构变化。
-- **OBI_level3 / OBI_delta**：3档订单簿不平衡指标，以及 5档与3档 OBI 的差值（`OBI_delta = OBI_level5 - OBI_level3`），反映深层盘口的增量不平衡。
-
-**标签生成（支持三种方法，由 `label_method` 参数控制）：**
-| 方法 | 公式 | 说明 |
-|------|------|------|
-| `l1` | `(p_{t+window} - p_t) / p_t` | 直接计算未来第 N 个 tick 的价格变动百分比 |
-| `l2` | `(MA_{t+window} - p_t) / p_t` | 先计算未来 N 个 tick 的 MidPrice 滑动均值，再求相对变化（默认） |
-| `l3` | 基于 bid1/ask1 的交易成本感知 | 在未来 bid1 均值超过多头入场成本时为 "涨"；未来 ask1 均值低于空头入场成本时为 "跌" |
-
-标签值：`1`=上涨、`0`=持平、`-1`=下跌
+不展示
 
 #### `window_normalize_FE(inputpath, outputpath, window_size)`
 
@@ -139,27 +119,7 @@ python process_data.py
 #### `FE_DeepLOB(nn.Module)`
 
 带特征工程的高频订单簿深度学习模型架构。**输入由4个独立张量组成**，不再拼接为单一输入：
-
-| 输入 | 形状 | 来源特征 |
-|------|:---:|----------|
-| `x_momentum` | `[batch, time_steps, 1]` | `MidPrice_diff` |
-| `x_pic` | `[batch, time_steps, 5]` | `Bid_G1~5, Ask_G1~5`（拼接为10列，经spatial conv后降维） |
-| `x_lt_sensor` | `[batch, time_steps, 1]` | `MidPrice` |
-| `x_st_sensor` | `[batch, time_steps, 2]` | `OBI_level3, OBI_delta` |
-
-**架构分五部分：**
-
-1. **Momentum 分支（动量卷积）**：3层因果1D卷积（kernel=4），对 `MidPrice_diff` 提取短期价格动量模式。输出：`[batch, time_steps, 8]`
-2. **Long-term Sensor 分支（长期传感器）**：5层膨胀因果1D卷积（dilation 1→2→4→8→8），对 `MidPrice` 捕捉长程依赖关系。输出：`[batch, time_steps, 1]`
-3. **Snapshot 分支（快照卷积）**：
-   - 首先使用 `conv_feat1`（1×2 kernel, stride=2）沿特征维度将10列引力特征降维至8通道
-   - 然后6层因果1D时间卷积（kernel=4，感受野=19）
-   - 最后用 `conv_feat2`（1×5 kernel）将8通道压缩至1维
-   - 输出：`[batch, 8, time_steps, 1]`
-4. **Inception 模块**：三个并行路径（1×1→3×1、1×1→5×1、MaxPool→1×1），输出通道均为12。聚合后：`[batch, 36, time_steps, 1]`
-5. **LSTM + Dense Head**：将 Momentum（8）、Inception（36）、Long-term Sensor（1）、短期斜率（2）在特征维度拼接（共 8+36+1+2=47 维），送入 LSTM（hidden=32），最后通过全连接层输出3分类 logits
-
-#### `train_engine(model, train_loader, optimizer, criterion, device, lr_scheduler)`
+涉及公司知识产权，未展示。
 
 单 epoch 训练函数：
 

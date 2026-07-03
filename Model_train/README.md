@@ -1,6 +1,6 @@
-# FE-DeepLOB 原油期货 LOB 价格方向预测
+# FE-DeepLOB 期货价格方向预测
 
-基于深度学习（FE-DeepLOB 架构）的上海原油期货（SC）L2 订单簿价格走势预测项目。模型使用 CNN + Inception + LSTM 混合架构，通过 4 个模态（momentum、price snapshot、long-term sensor、short-term sensor）对未来价格方向进行三分类预测（下跌/平稳/上涨）。
+基于深度学习（FE-DeepLOB 架构）的期货 L2 订单簿价格走势预测项目。模型使用 CNN + Inception + LSTM 混合架构，通过 4 个模态（momentum、price snapshot、long-term sensor、short-term sensor）对未来价格方向进行三分类预测（下跌/平稳/上涨）。
 
 ---
 
@@ -45,7 +45,7 @@
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `copy_data_path` | `T:/microvast-zx_920/Future/INE/sc` | 远端原始数据源目录路径 |
+| `copy_data_path` | `/yourdatabase` | 远端原始数据源目录路径 |
 | `fetch_file_path` | `Data/SC_Primary.csv` | 交易日-合约映射表 |
 | `raw_data_path` | `Data/Raw_data/` | 原始行情 CSV 存放目录 |
 | `processed_data_path` | `Data/FE_DeepLOB_data/Processed_data/` | 特征工程后数据输出目录 |
@@ -183,11 +183,6 @@ python train.py
                        Logits
 ```
 
-- **Momentum** — `MidPrice_diff`（对数收益×10000），3 层因果卷积捕捉短时动量
-- **PIC (Price Snapshot)** — 10 维 price gravity 特征 → 2 倍步长压缩 → 6 层因果时间卷积 → Inception 模块（3 条路径）→ bottleneck
-- **LT Sensor** — `MidPrice`（归一化后），5 层空洞因果卷积（dilation=1,2,4,8,8），感受野大
-- **ST Sensor** — `OBI_level3` + `OBI_delta`，直接拼接到 LSTM 输入
-
 此文件还包含两个辅助函数：
 - `train_engine()` — 单个 epoch 训练循环，含梯度裁剪
 - `validate_engine()` — 验证循环，返回 average loss + Down/Up 的 PR-AUC
@@ -221,26 +216,6 @@ python export_model.py
 | Output | `logits` | `(batch, 3)` |
 
 > **注意**：导出前需确认 `export_model.py` 中的模型参数（`num_features=5`）与训练时一致，且加载的权重路径正确。
-
----
-
-### `process_data.py` — 特征工程
-
-将原始 L2 行情 CSVs 处理为模型可用的特征矩阵：
-
-**原始输入**（CSV 列）：
-- `timestamp`, `bid1-5`, `ask1-5`, `bidSize1-5`, `askSize1-5`
-
-**生成特征**（14 列）：
-| 特征 | 列名 | 数量 | 描述 |
-|---|---|---|---|
-| MidPrice_diff | `MidPrice_diff` | 1 | ln(P_t / P_{t-1}) × 10000 |
-| Bid Gravity | `Bid_G1` ~ `Bid_G5` | 5 | 买方价格引力 |
-| Ask Gravity | `Ask_G1` ~ `Ask_G5` | 5 | 卖方价格引力 |
-| MidPrice | `MidPrice` | 1 | 归一化后的中间价 |
-| OBI_level3 | `OBI_level3` | 1 | 3 档订单簿不平衡 |
-| OBI_delta | `OBI_delta` | 1 | OBI_5 - OBI_3 |
-| Label | `price_move_label` | 1 | `-1`=下跌, `0`=平稳, `1`=上涨 |
 
 ---
 
