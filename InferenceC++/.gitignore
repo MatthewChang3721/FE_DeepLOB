@@ -1,0 +1,19 @@
+# Build output
+build/
+
+# Visual Studio files
+*.sdf
+*.opensdf
+*.suo
+*.user
+*.vcxproj.user
+.vs/
+
+# Backup files
+*~
+
+models/
+data/
+third_party/
+onnxruntime.dll
+c_cpp_properties.json

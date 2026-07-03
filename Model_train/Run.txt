@@ -1,0 +1,24 @@
+:: 1. Create virtual Env
+python -m venv venv
+.\venv\Scripts\activate
+
+:: 2. Install required packages
+pip install -r requirements.txt
+
+:: 3. Check CUDA version
+nvidia-smi
+
+:: 4. Install Pytorch GPU version
+pip install torch torchvision torchaudio --index-url https://mirrors.nju.edu.cn/pytorch/whl/cu126
+
+:: 5. Verify Pytorch packages
+python -c "import torch; print('\n>>>  GPU  check:', torch.cuda.is_available()); print('>>> CUDA version:', torch.version.cuda, '\n')"
+
+:: 6. Start Training
+python train.py
+
+:: 8. Visualization Analysis
+e.g.: python model_analysis.py 20260629_10_1bps_150.pt
+
+:: 9. Export as ONNX model
+python export_model.py

@@ -1,0 +1,28 @@
+:: 1. 建立物理隔离区：创建并激活虚拟环境
+python -m venv venv
+call .\venv\Scripts\activate
+
+:: 2. 装填纯逻辑依赖栈 (读取 requirements.txt)
+pip install -r requirements.txt
+
+:: 3. 挂载重型火力：安装 GPU 版 PyTorch 
+:: (注：这里默认拉取目前最稳定的 CUDA 12.1 版本。如果 GPU 较老，可将其改为 cu118)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+:: 4. 物理探针：强制验证 CUDA 驱动是否与 PyTorch 完美咬合
+python -c "import torch; print('\n>>> [架构师自检] GPU 点亮状态:', torch.cuda.is_available()); print('>>> [架构师自检] CUDA 挂载版本:', torch.version.cuda, '\n')"
+
+:: 5. 建立日志与数据防线 (确保 Python 运行不报路径错误)
+if not exist "Logs" mkdir Logs
+if not exist "Data\Raw_data" mkdir Data\Raw_data
+
+:: 6. 打通数据管道：拉取最新盘口切片
+echo >>> 正在执行 data_fetch.py，拉取实盘数据...
+python data_fetch.py
+
+:: 7. 引擎满载点火：启动高频特征提取与 Optuna 寻优
+echo >>> 数据装填完毕。Optuna 引擎点火...
+python train.py
+
+:: 保持终端敞开，防止执行完毕后窗口瞬间闪退
+pause

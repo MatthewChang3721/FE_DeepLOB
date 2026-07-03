@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Create Build Directory",
+            "command": "mkdir",
+            "args": [
+                "${workspaceFolder}\\build",
+                "-Force"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "type": "shell",
+            "label": "Build DeepLOB Engine",
+            "command": "cl.exe",
+            "args": [
+                "/Zi",                          // 生成调试信息 (.pdb)
+                "/EHsc",                        // 启用标准 C++ 异常处理机制
+                "/nologo",                      // 隐藏编译器版本启动信息
+                "/std:c++17",                   // 强制使用 C++17 标准
+                "/utf-8",
+                "/Fo:", "${workspaceFolder}\\build\\",     // .obj 输出到 build 文件夹
+                "/Fd:", "${workspaceFolder}\\build\\",     // .pdb 输出到 build 文件夹
+                "${workspaceFolder}\\src\\main.cpp",       // 编译的目标源文件
+                "/Fe:", "${workspaceFolder}\\build\\Model_Inference.exe", // 可执行文件输出到 build 文件夹
+                "/I", "${workspaceFolder}\\third_party\\onnxruntime\\include", // 包含头文件路径
+                "/link",                        // 开始指示链接器参数
+                "/LIBPATH:${workspaceFolder}\\third_party\\onnxruntime\\lib", // 静态链接库搜索路径
+                "onnxruntime.lib"               // 链接编译期所需的库
+            ],
+            "dependsOn": ["Create Build Directory"],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

@@ -1,0 +1,71 @@
+=========================================================
+  ONNX Runtime 第三方库下载与配置说明
+=========================================================
+
+本项目依赖 ONNX Runtime v1.27 (x64, Windows) 库文件。
+third_party/onnxruntime/ 目录需要包含以下文件：
+
+    include/   （头文件，约 14 个 .h 文件）
+    lib/       （库文件：onnxruntime.lib, onnxruntime.dll 等）
+
+---------------------------------------------------------
+  下载步骤（两种方式任选其一）
+---------------------------------------------------------
+
+方式一：NuGet 包管理器（推荐）
+~~~~~~~~~~
+1. 通过 VS 开发者命令行或 PowerShell 执行：
+   dotnet tool install --global NuGet.Build  # 安装 NuGet CLI
+
+2. 下载 ONNX Runtime 包：
+   nuget install Microsoft.ML.OnnxRuntime -Version 1.27.1 -OutputDirectory tmp_nuget
+
+3. 将下载的文件复制到 third_party/onnxruntime/：
+   （解压后路径：tmp_nuget/Microsoft.ML.OnnxRuntime.1.27.1/runtimes/win-x64/native/）
+
+   需要复制的文件：
+   - include/  → third_party/onnxruntime/include/
+   - onnxruntime.lib  → third_party/onnxruntime/lib/
+   - onnxruntime.dll  → third_party/onnxruntime/lib/
+   - onnxruntime.pdb  → third_party/onnxruntime/lib/
+
+4. 清理临时文件：
+   Remove-Item -Recurse -Force tmp_nuget
+
+方式二：直接从 GitHub Releases 下载
+~~~~~~~~~~
+1. 打开浏览器访问：
+   https://github.com/microsoft/onnxruntime/releases
+
+2. 找到 ONNX Runtime v1.27.x 版本，下载 Windows x64 版本：
+   文件名类似：onnxruntime-win-x64-1.27.x.zip
+
+3. 解压后，将内容按以下方式放置：
+   解压出的 include/  → third_party/onnxruntime/include/
+   解压出的 lib/      → third_party/onnxruntime/lib/
+
+
+---------------------------------------------------------
+  验证下载是否正确
+---------------------------------------------------------
+
+下载完成后，third_party/onnxruntime/ 目录结构应为：
+
+    third_party/onnxruntime/
+    ├── include/
+    │   ├── onnxruntime_c_api.h
+    │   ├── onnxruntime_cxx_api.h
+    │   ├── onnxruntime_cxx_inline.h
+    │   └── ... (其他头文件，约 14 个)
+    └── lib/
+        ├── onnxruntime.lib   (约 2 KB)
+        ├── onnxruntime.dll   (约 15 MB)
+        └── onnxruntime.pdb   (可选，约 400 MB，仅调试需要)
+
+
+---------------------------------------------------------
+  配置完成后的编译
+---------------------------------------------------------
+
+在 VS Code 中按 Ctrl+Shift+B 即可编译。
+编译产物会自动输出到 build/ 文件夹。
