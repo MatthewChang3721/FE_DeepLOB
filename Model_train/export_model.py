@@ -9,10 +9,8 @@ import config
 
 def export_to_onnx(pt_filename: str):
     print("1. Loading original model...")
-    # 实例化纯净的原始网络拓扑 (替换为你实际的参数)
     model = FE_DeepLOB(num_features=5, num_classes=3)
     
-    # 加载权重 (如果是 compile 过的，记得加载 _orig_mod 的纯净版)
     pt_path = os.path.join("Model/torch", pt_filename)
     state_dict = torch.load(pt_path, map_location="cpu")
     model.load_state_dict(state_dict)
