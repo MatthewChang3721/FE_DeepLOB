@@ -1,0 +1,9 @@
+:: 1. 建立物理隔离区：创建并激活虚拟环境
+python -m venv venv
+.\venv\Scripts\activate
+
+:: 2. 安装SQL库
+pip install -r pymysql
+
+:: 3. 获取主力合约信息
+python SQL_PrimaryContract.py
