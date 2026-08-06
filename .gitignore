@@ -1,3 +1,9 @@
 data_fetch.py
 FE_DeepLOB.py
 process_data.py
+
+# SQL
+SQL/
+
+__pycache__/
+.vscode/

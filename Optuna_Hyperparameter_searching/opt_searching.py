@@ -13,7 +13,7 @@ from torch import nn
 from dataset import create_dataloader
 from FE_DeepLOB import FE_DeepLOB, train_engine, validate_engine
 from train_artifact import SoftFocalLoss, EarlyStopping
-from process_data import process_data, window_normalize_FE
+from process_data import run_pipeline
 import config
 
 def setup_logger():
@@ -66,6 +66,7 @@ def objective(trial, logger):
         [max_p, min_p, 0.0]
     ]
 
+    # Dataset
     train_loader, train_label = create_dataloader(
             config.normalized_data_path,
             config.train_start_file,
@@ -152,16 +153,8 @@ def objective(trial, logger):
 def main():
     logger = setup_logger()
 
-    # 清空并重建数据目录，确保每次运行从干净状态开始
-    for data_dir in [config.processed_data_path, config.normalized_data_path]:
-        dir_path = Path(data_dir)
-        if dir_path.exists():
-            logger.info(f'Cleaning directory: {data_dir}')
-            shutil.rmtree(dir_path)
-        dir_path.mkdir(parents=True, exist_ok=True)
-
     target_windows = [10, 20, 50, 100]
-    target_alphas = [1.0, 1.5, 2.0]
+    target_alphas = [1.0, 1.5, 2.0, 2.5]
 
     best_results_log = {}
     for lw in target_windows:
@@ -174,23 +167,24 @@ def main():
             env_name = f'LW_{lw}_Alpha_{alpha}'
             logger.info(f'Current Test Environment: Label Window = {lw}, Alpha = {alpha} bps')
 
-            inputpath = config.raw_data_path
-            outputpath = config.processed_data_path
-            path = Path(outputpath)
-            path.mkdir(parents=True, exist_ok=True)
+            # 清理数据目录，确保每组 (lw, alpha) 从干净状态开始
+            for data_dir in [config.processed_data_path, config.normalized_data_path]:
+                dir_path = Path(data_dir)
+                if dir_path.exists():
+                    logger.info(f'Cleaning directory: {data_dir}')
+                    shutil.rmtree(dir_path)
+                dir_path.mkdir(parents=True, exist_ok=True)
 
             logger.info('Preparing data...')
-            raw_files = list(Path(inputpath).glob('*.csv'))
-
-            for raw_file in raw_files:
-                outputfile = f'{outputpath}processed_{raw_file.stem[-4:]}.csv'
-                process_data(raw_file, outputfile, label_method='l2', label_window = lw, alpha = alpha * 1e-4)
-
-            inputpath_normalized = config.processed_data_path
-            outputpath_normalized = config.normalized_data_path 
-            path = Path(outputpath_normalized)
-            path.mkdir(parents=True, exist_ok=True)
-            window_normalize_FE(inputpath_normalized, outputpath_normalized, window_size = 5)
+            run_pipeline(
+                label_method='path',
+                label_window=lw,
+                alpha=alpha * 1e-4,
+                normalize_window=config.normalize_window,
+                inputpath=config.raw_data_path,
+                processedpath=config.processed_data_path,
+                outputpath=config.normalized_data_path,
+            )
 
             study = optuna.create_study(direction='maximize', study_name=env_name)
             

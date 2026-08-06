@@ -7,9 +7,10 @@ pip install -r requirements.txt
 
 :: 3. Check CUDA version
 nvidia-smi
+nvcc --version
 
 :: 4. Install Pytorch GPU version
-pip install torch torchvision torchaudio --index-url https://mirrors.nju.edu.cn/pytorch/whl/cu126
+pip install torch torchvision torchaudio --index-url https://mirrors.nju.edu.cn/pytorch/whl/cu[版本号]
 
 :: 5. Verify Pytorch packages
 python -c "import torch; print('\n>>>  GPU  check:', torch.cuda.is_available()); print('>>> CUDA version:', torch.version.cuda, '\n')"

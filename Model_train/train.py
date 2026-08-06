@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 import config
 from dataset import create_dataloader
 from FE_DeepLOB import FE_DeepLOB, train_engine, validate_engine
-from process_data import process_data, window_normalize_FE
+from process_data import run_pipeline
 from train_artifact import EarlyStopping, SoftFocalLoss
 
 
@@ -59,20 +59,14 @@ def prepare_data(logger):
     if not raw_files:
         raise FileNotFoundError(f"No CSV files found in {config.raw_data_path}")
 
-    for raw_file in raw_files:
-        output_file = processed_path / f"processed_{raw_file.stem[-4:]}.csv"
-        process_data(
-            raw_file,
-            output_file,
-            label_method=config.label_method,
-            label_window=config.label_window,
-            alpha=config.alpha,
-        )
-
-    window_normalize_FE(
-        str(processed_path),
-        str(normalized_path),
-        window_size=config.normalize_window,
+    run_pipeline(
+        label_method=config.label_method,
+        label_window=config.label_window,
+        alpha=config.alpha,
+        normalize_window=config.normalize_window,
+        inputpath=config.raw_data_path,
+        processedpath=config.processed_data_path,
+        outputpath=config.normalized_data_path,
     )
     logger.info("Data preparation finished.")
 

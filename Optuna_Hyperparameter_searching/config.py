@@ -1,13 +1,13 @@
 # Data paths
 copy_data_path = "T:/microvast-zx_920/Future/INE/sc"
-fetch_file_path = "Data/SC_Primary.csv"
+fetch_file_path = "Data/Contract.csv"
 raw_data_path = "Data/Raw_data/"
 processed_data_path = "Data/FE_DeepLOB_data/Processed_data/"
 normalized_data_path = "Data/FE_DeepLOB_data/Normalized_data/"
 log_dir = "Logs/"
 
 # Data processing
-label_method = "l2"
+label_method = "trend"  # 'trend' = midprice rolling | 'path' = triple barrier
 alpha = 1 * 1e-4  # bps
 label_window = 10  # ticks
 normalize_window = 5
@@ -15,9 +15,9 @@ normalize_window = 5
 # Dataloader split
 train_start_file = 0
 train_num_files = 25
-val_start_file = 25
+val_start_file = 25 # val_start_file = train_start_file + train_num_files
 val_num_files = 5
-batch_size = 1024
+batch_size = 1024  # 1024 is a normal batch size, and can be larger, depends on GPU.
 target_size = 1
 shuffle_train = True
 drop_last = True

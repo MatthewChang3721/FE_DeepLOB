@@ -77,7 +77,7 @@ def visualization_engine(model, val_loader, device, confidence_threshold: float 
     return accuracy, all_preds, all_labels, all_probs
 
 
-def signal_hist(df, friction_cost: float = 0.0002, x_lim: float = 0.001, save_name: str = None):
+def signal_hist(df, friction_cost: float = 2, x_lim: float = 10, save_name: str = None):
     sns.set_theme(style="whitegrid")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharex=True, sharey=True)
@@ -88,7 +88,7 @@ def signal_hist(df, friction_cost: float = 0.0002, x_lim: float = 0.001, save_na
         ax = axes[i]
         
         # 获取该预测标签下的真实价格移动序列
-        subset = df[df['predicted_label'] == label]['price_move_pctg'].dropna()
+        subset = df[df['predicted_label'] == label]['price_move_bps'].dropna()
         
         # 【可视化关键】：金融高频数据呈显著的尖峰厚尾分布
         # 如果不截断极端离群值，少数几个极值会把 X 轴撑得极大，导致中间 99% 的分布缩成一根针
@@ -113,12 +113,12 @@ def signal_hist(df, friction_cost: float = 0.0002, x_lim: float = 0.001, save_na
         ax.axvline(x=0, color='black', linestyle='-', linewidth=1.2)
         
         # 画出致命的 ±friction_cost 摩擦成本边界
-        ax.axvline(x=friction_cost, color='red', linestyle='--', linewidth=1.5, label=f'+{friction_cost*10000:.0f}bp Friction')
-        ax.axvline(x=-friction_cost, color='red', linestyle='--', linewidth=1.5, label=f'-{friction_cost*10000:.0f}bp Friction')
+        ax.axvline(x=friction_cost, color='red', linestyle='--', linewidth=1.5, label=f'+{friction_cost:.0f}bp Friction')
+        ax.axvline(x=-friction_cost, color='red', linestyle='--', linewidth=1.5, label=f'-{friction_cost:.0f}bp Friction')
         
         # 标题标注该类别的具体样本量，用于确认类别不平衡的程度
         ax.set_title(f'Predicted Label: {label}\n(n={len(subset)})', fontsize=12, fontweight='bold')
-        ax.set_xlabel('True Price Move (price_move_pctg)', fontsize=11)
+        ax.set_xlabel('True Price Move (price_move_bps)', fontsize=11)
         
         if i == 0:
             ax.set_ylabel('Density', fontsize=11)
@@ -148,10 +148,10 @@ def model_signal_split_plot(confidence_level, df, save_name: str = None):
 
     # 提取有效预测的横坐标 (置信度) 和 纵坐标 (真实价格移动bp)
     conf_down = df['Pred_prob_Down'].values[mask_down_valid]
-    pctg_down = df['price_move_pctg'].values[mask_down_valid] * 10000
+    pctg_down = df['price_move_bps'].values[mask_down_valid]
 
     conf_up = df['Pred_prob_UP'].values[mask_up_valid]
-    pctg_up = df['price_move_pctg'].values[mask_up_valid] * 10000
+    pctg_up = df['price_move_bps'].values[mask_up_valid]
 
     # --- 打印一下过滤结果 ---
     print(f"当前置信度阈值: {CONFIDENCE_LEVEL}")
@@ -217,7 +217,7 @@ def model_signal_scatter(confidence_level, df, save_name: str = None):
     x_coords[mask_pred_stat] = prob_up[mask_pred_stat] - prob_down[mask_pred_stat]
 
     # 提取纵坐标 (真实收益率 bps)
-    y_coords = df['price_move_pctg'].values * 10000
+    y_coords = df['price_move_bps'].values
 
     # 根据置信度阈值进行终极切分
     mask_strong_down = mask_pred_down & (max_probs >= CONFIDENCE_LEVEL)
@@ -280,7 +280,7 @@ def model_signal_scatter(confidence_level, df, save_name: str = None):
 
 def net_directional_signal_plot(df, y_lim: int = 30, save_name: str = None):
     net_directional_score = df['Net_directional_score'].values
-    actual_returns = df['price_move_pctg'].values * 10000 # in bps
+    actual_returns = df['price_move_bps'].values # in bps
 
     # ==========================================
     # 架构师级定制：A股/国内高频专属视觉引擎

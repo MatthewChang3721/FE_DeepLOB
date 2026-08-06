@@ -22,7 +22,7 @@
 | `model_save_name` | `"best_model.pt"` | 最佳模型文件名 |
 | `log_dir` | `"Logs/"` | 日志输出目录 |
 | **数据处理** | | |
-| `label_method` | `"l2"` | 标签生成方法 |
+| `label_method` | `"trend"` | 标签生成方法（`'trend'` = midprice 滚动均值，`'path'` = 三重屏障） |
 | `alpha` | `1e-4` | 标签生成中价格变动阈值 |
 | `label_window` | `10` | 预测未来多少个 tick 的价格方向 |
 | `normalize_window` | `5` | 滚动归一化使用的历史天数 |
@@ -69,12 +69,13 @@
 **特征工程**：涉及公司知识产权，未展示具体公式。
 
 **标签生成**：
-- 使用 `label_method` 参数选择标签生成策略（共三种预定义方法），基于未来窗口的价格走势计算 `price_move_label`（取值 -1 / 0 / 1，分别代表下跌/持平/上涨），通过 `alpha` 阈值控制判定的灵敏度。
-- 默认使用 l2 方法。
+- 使用 `label_method` 参数选择标签生成策略（共两种预定义方法），基于未来窗口的价格走势计算 `price_move_label`（取值 -1 / 0 / 1，分别代表下跌/持平/上涨），通过 `alpha` 阈值控制判定的灵敏度。
+- `'trend'`（默认）：基于未来窗口内 MidPrice 滚动均值相对当前价格的变动超过 `alpha`（bps）来判定标签。
+- `'path'`：基于三重屏障方法（Numba 加速），标签由窗口内先触及的上/下屏障方向决定。
 
 标签值：`1`=上涨、`0`=持平、`-1`=下跌
 
-#### `window_normalize_FE(inputpath, outputpath, window_size)`
+#### `window_normalize(inputpath, outputpath, window_size)`
 
 对处理后的CSV文件进行跨日滚动归一化，**严格保证没有未来信息泄露**。
 
@@ -92,7 +93,7 @@
 python process_data.py
 ```
 
-此时使用默认参数从 `Data/SC_Raw_data/` 读取原始 CSV 并执行完整的数据预处理流程。
+此时使用默认参数从 `Data/Raw_data/` 读取原始 CSV 并执行完整的数据预处理流程。
 
 ---
 
@@ -102,9 +103,10 @@ python process_data.py
 
 继承 PyTorch `Dataset` 的时序切片数据集：
 
-- 从 tensor 中分离特征列和标签列
+- **按列名（而非位置索引）访问特征**，并带 schema 校验：必需列缺失或出现未知列时立即抛出明确错误
+- 特征分为四组命名张量：`momentum`（MidPrice_diff）、`pic`（Bid_G1..Ask_G5）、`lt_sensor`（MidPrice）、`st_sensor`（OBI_3, OBI_delta）
 - 以滑动窗口方式生成 `(X, Y)` 样本对，偏移量确保标签取自特征窗口的最后一个时间点
-- 自动限制索引范围避免越界
+- 自动限制索引范围避免越界，并校验数据长度是否满足窗口要求
 
 #### `create_dataloader(inputpath, start_files, num_files, window_size, target_size, batch_size, shuffle, drop_last)`
 
@@ -157,13 +159,13 @@ python process_data.py
 
 ---
 
-### `train.py` — Optuna 主搜索入口
+### `opt_searching.py` — Optuna 主搜索入口
 
-核心控制脚本，执行流程：
+核心控制脚本（旧版 `train.py` 的继任者），执行流程：
 
 1. **数据目录清理**：运行开始时自动删除并重建数据缓存目录，确保每次运行从干净状态开始
 2. **外层环境遍历**：遍历 `target_windows`，对每个窗口动态缩放 alpha 阈值（缩放因子基于窗口大小计算），使标签分布在不同时间尺度下保持合理
-3. **数据制备**：对每个环境组合，运行 `process_data()` 和 `window_normalize_FE()` 生成对应标签的文件
+3. **数据制备**：对每个环境组合，运行 `process_data()` 和 `window_normalize()` 生成对应标签的文件
 4. **Optuna 搜索**：对每个环境创建独立的 study，优化目标函数，每环境运行多个 trial
 5. **日志记录**：所有输出写入日志文件
 
@@ -193,7 +195,7 @@ Optuna 在每个 trial 中搜索的超参数及范围如下：
 
 ### 修改搜索范围
 
-在 `train.py` 的 `objective()` 函数中调整 `trial.suggest_*` 参数。
+在 `opt_searching.py` 的 `objective()` 函数中调整 `trial.suggest_*` 参数。
 
 ### 新增/移除搜索参数
 
@@ -221,10 +223,10 @@ dropout = trial.suggest_float('dropout', 0.1, 0.5)
 3. 安装 GPU 版 PyTorch（推荐 CUDA 12.1）
 4. 确认 GPU 可用：`python -c "import torch; print(torch.cuda.is_available())"`
 5. **独立运行数据预处理**（可选）：`python process_data.py`
-6. **启动全流程**：`python train.py`
+6. **启动全流程**：`python opt_searching.py`
 7. 查看结果日志
 
-> `train.py` 启动时会自动清空并重建数据缓存目录，确保每次运行从干净状态开始。
+> `opt_searching.py` 启动时会自动清空并重建数据缓存目录，确保每次运行从干净状态开始。
 
 ---
 
@@ -237,7 +239,8 @@ Optuna_Hyperparameter_searching/
 ├── dataset.py              # 时间序列数据集与 DataLoader
 ├── FE_DeepLOB.py           # 神经网络模型 + 训练/验证引擎
 ├── train_artifact.py       # 训练辅助组件
-├── train.py                # Optuna 主入口
+├── train.py                # （旧版）Optuna 入口
+├── opt_searching.py        # Optuna 主入口
 ├── requirements.txt        # Python 依赖
 ├── Run.txt                 # 运行指引
 ├── README.md               # 本文件

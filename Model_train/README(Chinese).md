@@ -56,7 +56,7 @@
 
 | 变量 | 说明 |
 |---|---|
-| `label_method` | 标签生成方法：支持多种标签策略 |
+| `label_method` | 标签生成方法：`'trend'` = midprice 滚动均值，`'path'` = 三重屏障 |
 | `alpha` | 标签阈值，价格变化超过此值标记为涨/跌，否则为平稳 |
 | `label_window` | 标签窗口（tick 数），可调整 |
 | `normalize_window` | 归一化滑动窗口大小，可调整 |
@@ -172,8 +172,9 @@ python export_model.py
 
 ### `dataset.py` — 滑动窗口数据集
 
-- `TimeSeriesDataset`：以滑动窗口方式从数据中切分多个输入模态
-- `create_dataloader()`：读入多个归一化文件，返回 `DataLoader`
+- `TimeSeriesDataset`：以滑动窗口方式从数据中切分多个输入模态；**按列名（而非位置索引）访问特征**，并带 schema 校验——必需列缺失或出现未知列时立即抛出明确错误
+- 四组命名特征：`momentum`（MidPrice_diff）、`pic`（Bid_G1..Ask_G5）、`lt_sensor`（MidPrice）、`st_sensor`（OBI_3, OBI_delta）
+- `create_dataloader()`：读入多个归一化文件，返回 `DataLoader`；对请求的文件范围做越界检查
 
 ### `data_fetch.py` — 数据拉取
 

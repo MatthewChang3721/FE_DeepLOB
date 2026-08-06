@@ -22,7 +22,7 @@ Stores base parameters that remain fixed during Optuna search. Modify here when 
 | `model_save_name` | `"best_model.pt"` | Best model filename |
 | `log_dir` | `"Logs/"` | Log output directory |
 | **Data Processing** |||
-| `label_method` | `"l2"` | Label generation method |
+| `label_method` | `"trend"` | Label generation method (`'trend'` = midprice rolling, `'path'` = triple barrier) |
 | `alpha` | `1e-4` | Price movement threshold for label generation |
 | `label_window` | `10` | Number of ticks to look ahead for price direction |
 | `normalize_window` | `5` | Number of historical days for rolling normalization |
@@ -69,12 +69,13 @@ Performs feature engineering and label generation on a single day's raw LOB CSV 
 **Feature Engineering**: Contains proprietary intellectual property — specific formulas are not disclosed.
 
 **Label Generation**:
-- Uses the `label_method` parameter to select a labeling strategy (three predefined methods available), computing `price_move_label` based on future-window price movement (values: -1 / 0 / 1 representing down/neutral/up respectively). The `alpha` threshold controls classification sensitivity.
-- Default method: l2.
+- Uses the `label_method` parameter to select a labeling strategy from two predefined methods, computing `price_move_label` based on future-window price movement (values: -1 / 0 / 1 representing down/neutral/up respectively). The `alpha` threshold controls classification sensitivity.
+- `'trend'` (default): labels based on the future rolling mean of MidPrice exceeding `alpha` (bps).
+- `'path'`: labels via a triple-barrier method (Numba-accelerated), where the label is determined by whichever barrier (upper/lower) is touched first within the window.
 
 Label values: `1` = up, `0` = neutral, `-1` = down
 
-#### `window_normalize_FE(inputpath, outputpath, window_size)`
+#### `window_normalize(inputpath, outputpath, window_size)`
 
 Performs cross-day rolling normalization on processed CSV files, **strictly ensuring no future data leakage**.
 
@@ -92,7 +93,7 @@ Performs cross-day rolling normalization on processed CSV files, **strictly ensu
 python process_data.py
 ```
 
-This reads raw CSV files from `Data/SC_Raw_data/` with default parameters and executes the full preprocessing pipeline.
+This reads raw CSV files from `Data/Raw_data/` with default parameters and executes the full preprocessing pipeline.
 
 ---
 
@@ -102,9 +103,10 @@ This reads raw CSV files from `Data/SC_Raw_data/` with default parameters and ex
 
 A PyTorch `Dataset` subclass for temporal sliding-window slicing:
 
-- Separates feature columns and label columns from the tensor
+- **Accesses features by column name** (not positional index), with schema validation that raises a clear error when required columns are missing or unexpected columns appear
+- Groups features into four named tensors: `momentum` (MidPrice_diff), `pic` (Bid_G1..Ask_G5), `lt_sensor` (MidPrice), `st_sensor` (OBI_3, OBI_delta)
 - Generates `(X, Y)` sample pairs via sliding windows, with offset ensuring labels come from the last timestep of the feature window
-- Automatically constrains index range to prevent out-of-bounds errors
+- Automatically constrains index range to prevent out-of-bounds errors, and validates data length against the requested window
 
 #### `create_dataloader(inputpath, start_files, num_files, window_size, target_size, batch_size, shuffle, drop_last)`
 
@@ -157,13 +159,13 @@ Validation loss-based early stopping:
 
 ---
 
-### `train.py` — Optuna Search Entry Point
+### `opt_searching.py` — Optuna Search Entry Point
 
-Core control script with the following workflow:
+Core control script (successor to the legacy `train.py`) with the following workflow:
 
 1. **Data directory cleanup**: Automatically deletes and recreates cache directories at startup, ensuring a clean state for each run
 2. **Outer environment sweep**: Iterates over `target_windows`, dynamically scaling the alpha threshold for each window (scaling factor computed from window size) to maintain reasonable label distributions across different time scales
-3. **Data preparation**: For each environment combination, runs `process_data()` and `window_normalize_FE()` to generate corresponding labeled files
+3. **Data preparation**: For each environment combination, runs `process_data()` and `window_normalize()` to generate corresponding labeled files
 4. **Optuna search**: Creates an independent study for each environment, optimizing the objective function over multiple trials
 5. **Logging**: All output is written to log files
 
@@ -193,7 +195,7 @@ The specific construction logic of each matrix parameter involves proprietary in
 
 ### Modifying Search Ranges
 
-Adjust `trial.suggest_*` parameters in the `objective()` function of `train.py`.
+Adjust `trial.suggest_*` parameters in the `objective()` function of `opt_searching.py`.
 
 ### Adding/Removing Search Parameters
 
@@ -221,10 +223,10 @@ Refer to `Run.txt`:
 3. Install GPU-enabled PyTorch (CUDA 12.1 recommended)
 4. Verify GPU availability: `python -c "import torch; print(torch.cuda.is_available())"`
 5. **Standalone data preprocessing** (optional): `python process_data.py`
-6. **Run full pipeline**: `python train.py`
+6. **Run full pipeline**: `python opt_searching.py`
 7. Check results in the log files
 
-> `train.py` automatically cleans and rebuilds data cache directories at startup, ensuring a clean state for each run.
+> `opt_searching.py` automatically cleans and rebuilds data cache directories at startup, ensuring a clean state for each run.
 
 ---
 
@@ -237,7 +239,8 @@ Optuna_Hyperparameter_searching/
 ├── dataset.py              # Time series dataset & DataLoader
 ├── FE_DeepLOB.py           # Neural network model + training/validation engine
 ├── train_artifact.py       # Training utilities
-├── train.py                # Optuna entry point
+├── train.py                # (legacy) Optuna entry point
+├── opt_searching.py        # Optuna entry point
 ├── requirements.txt        # Python dependencies
 ├── Run.txt                 # Run instructions
 ├── README.md               # This file (English)

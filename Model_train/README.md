@@ -56,7 +56,7 @@ A deep learning project for futures L2 Limit Order Book price movement predictio
 
 | Variable | Description |
 |---|---|
-| `label_method` | Label generation method; supports multiple strategies |
+| `label_method` | Label generation method: `'trend'` = midprice rolling mean, `'path'` = triple barrier |
 | `alpha` | Label threshold; price changes exceeding this threshold are labeled as up/down, otherwise stationary |
 | `label_window` | Label window (in ticks), configurable |
 | `normalize_window` | Normalization sliding window size, configurable |
@@ -170,8 +170,9 @@ python export_model.py
 
 ### `dataset.py` — Sliding Window Dataset
 
-- `TimeSeriesDataset`: extracts multiple input modalities from data via a sliding window
-- `create_dataloader()`: reads normalized files and returns a `DataLoader`
+- `TimeSeriesDataset`: extracts multiple input modalities from data via a sliding window; **accesses features by column name** (not positional index) with schema validation — missing/unexpected columns raise a clear error
+- Four named feature groups: `momentum` (MidPrice_diff), `pic` (Bid_G1..Ask_G5), `lt_sensor` (MidPrice), `st_sensor` (OBI_3, OBI_delta)
+- `create_dataloader()`: reads normalized files and returns a `DataLoader`; performs bounds-checking on the requested file range
 
 ### `data_fetch.py` — Data Fetching
 

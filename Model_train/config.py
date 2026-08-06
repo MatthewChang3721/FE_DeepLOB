@@ -1,6 +1,6 @@
 # Data paths
-copy_data_path = "T:/microvast-zx_920/Future/INE/sc"
-fetch_file_path = "Data/SC_Primary.csv"
+copy_data_path = rf"T:\microvast-gtja_984\Future\CFFEX\IM"
+fetch_file_path = "Data/Contract.csv"
 raw_data_path = "Data/Raw_data/"
 processed_data_path = "Data/FE_DeepLOB_data/Processed_data/"
 normalized_data_path = "Data/FE_DeepLOB_data/Normalized_data/"
@@ -9,7 +9,7 @@ model_save_name = "best_model.pt"
 log_dir = "Logs/"
 
 # Data processing
-label_method = "l2"
+label_method = "trend"  # 'trend' = midprice rolling | 'path' = triple barrier
 alpha = 1 * 1e-4  # bps
 label_window = 10  # ticks
 normalize_window = 5
