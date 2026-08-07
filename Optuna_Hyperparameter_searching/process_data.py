@@ -47,7 +47,7 @@ def process_data(inputfile, outputfile, label_method: str = 'trend',
     处理 LOB 原始 CSV 文件（含特征工程版）：
     1. 保留 timestamp + bid/ask/bidSize/askSize 列
     2. 计算 MidPrice 和 price_gravity (Bid_G/Ask_G)
-    3. 计算 MidPrice_diff（对数差分）
+    3. 计算 MidPrice_diff（百分比差分）
     4. 用指定方法生成 price_move_label
     5. 截掉头部/尾部 NaN
     6. 输出 timestamp + Bid_G* + Ask_G* + MidPrice_diff + label
@@ -92,8 +92,8 @@ def process_data(inputfile, outputfile, label_method: str = 'trend',
     obi5 = (bid_cum_5 - ask_cum_5) / denom_5
     df['OBI_delta'] = obi5 - obi3
 
-    # 5. MidPrice 对数差分（当前 tick vs 前一个 tick），乘 10000 以 bps 为单位
-    df['MidPrice_diff'] = np.log(df['MidPrice'] / df['MidPrice'].shift(1)).fillna(0) * 10000.0
+    # 5. MidPrice 百分比差分（当前 tick vs 前一个 tick），乘 10000 以 bps 为单位
+    df['MidPrice_diff'] = df['MidPrice'].pct_change().fillna(0) * 10000.0
 
     # 5. 标签
     if label_method == 'path':
@@ -147,12 +147,21 @@ def window_normalize(inputpath, outputpath, window_size=5):
             stats_list = list(buffer)[:-1]
             stats_df = pd.concat(stats_list, ignore_index=True)
 
-            hist_mean = stats_df[normalize_cols].mean()
-            hist_std = stats_df[normalize_cols].std()
-            hist_std[hist_std < 1e-8] = 1      # 防除零
+            # price_gravity: 仅除以历史窗口 std（保留正负号，不做中心化）
+            gravity_cols = normalize_cols[:-1]   # Bid_G* + Ask_G*（末尾是 MidPrice）
+            hist_std_gravity = stats_df[gravity_cols].std()
+            hist_std_gravity[hist_std_gravity < 1e-8] = 1   # 防除零
+
+            # MidPrice: 保持 z-score（减均值 + 除 std）
+            mid_col = 'MidPrice'
+            hist_mean_mid = stats_df[mid_col].mean()
+            hist_std_mid = stats_df[mid_col].std()
+            if hist_std_mid < 1e-8:
+                hist_std_mid = 1
 
             target_df = buffer[-1].copy()
-            target_df[normalize_cols] = (target_df[normalize_cols] - hist_mean) / hist_std
+            target_df[mid_col] = (target_df[mid_col] - hist_mean_mid) / hist_std_mid
+            target_df[gravity_cols] = target_df[gravity_cols] / hist_std_gravity
 
             file_name = f'normalized_{processing_date}.csv'
             save_path = output_dir / file_name

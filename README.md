@@ -77,7 +77,7 @@ Each module has its own detailed documentation and `requirements.txt`. See the r
 ```bash
 cd Optuna_Hyperparameter_searching
 pip install -r requirements.txt
-python train.py
+python opt_searching.py
 ```
 
 ### Model Training

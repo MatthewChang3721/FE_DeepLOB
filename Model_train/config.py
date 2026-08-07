@@ -1,6 +1,6 @@
 # Data paths
 copy_data_path = rf"T:\microvast-gtja_984\Future\CFFEX\IM"
-fetch_file_path = "Data/Contract.csv"
+fetch_file_path = "../SQL/Contract.csv"
 raw_data_path = "Data/Raw_data/"
 processed_data_path = "Data/FE_DeepLOB_data/Processed_data/"
 normalized_data_path = "Data/FE_DeepLOB_data/Normalized_data/"
@@ -16,8 +16,8 @@ normalize_window = 5
 
 # Dataloader split
 train_start_file = 0
-train_num_files = 20
-val_start_file = 20
+train_num_files = 25
+val_start_file = 25
 val_num_files = 5
 batch_size = 1024
 target_size = 1

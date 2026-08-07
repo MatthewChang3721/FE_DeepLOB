@@ -1,0 +1,360 @@
+════════════════════════════════════════════════════════════════════
+FE-DeepLOB 期货 L2 订单簿价格方向预测 —— 整套工作流程交付文档
+（数据拉取 → 特征工程 → 超参数搜索 → 生产训练 → 模型导出）
+════════════════════════════════════════════════════════════════════
+
+─────────────────────────────────────────────────────────────
+第一部分：项目概览
+─────────────────────────────────────────────────────────────
+本项目使用高频限价订单簿（LOB, Limit Order Book）数据，基于
+CNN + Inception + LSTM 混合架构，预测期货短期价格方向
+（上涨/下跌/持平三类）。
+
+整个系统分 3 个阶段：
+  Phase 0 : SQL 获取主力合约映射
+  Phase 1 : 拉取原始 L2 行情数据
+  Phase 2 : Optuna 超参数搜索（搜出最优超参数组合）
+  Phase 3 : 生产模型训练（用最优参数正式训练）
+  Phase 4 : 模型分析与 ONNX 导出
+
+说明：本流程使用两套几乎相同的代码目录：
+  · Optuna_Hyperparameter_searching/ —— 专用于超参数搜索
+  · Model_train/                    —— 专用于生产训练
+两目录下的 process_data.py / dataset.py / FE_DeepLOB.py 内容一致。
+C++ 推理部分（InferenceC++/）不在本文档范围内。
+
+─────────────────────────────────────────────────────────────
+第二部分：整体数据流
+─────────────────────────────────────────────────────────────
+
+   ┌──────────────────────────────────────────────┐
+   │ SQL/SQL_PrimaryContract.py                   							    │
+   │ MySQL → Contract.csv（交易日-主力合约映射表）    				    │
+   └──────────────┬───────────────────────────────┘
+                  			    ▼
+   ┌──────────────────────────────────────────────┐
+   │ data_fetch.py（两个模块目录各有一份）     					            │
+   │ 按 Contract.csv 从远程复制 L2 行情 CSV          						    │
+   │ 输出 → Data/Raw_data/                         							    │
+   └──────────────┬───────────────────────────────┘
+                  			    ▼
+   ┌──────────────────────────────────────────────┐
+   │ process_data.py → run_pipeline()             						    │
+   │  ├─ process_data()  特征工程 + 标签生成        						    │
+   │  └─ window_normalize()  跨日滚动归一化          					    │
+   │ 输出 → Processed_data/ → Normalized_data/     					    │
+   └──────────────┬───────────────────────────────┘
+                  			    ▼
+   ┌──────────────────────────────────────────────┐
+   │ dataset.py → TimeSeriesDataset + DataLoader    					    │
+   │ 滑动窗口切分多模态输入                          							    │
+   └──────────────┬───────────────────────────────┘
+                  			    ▼
+   ╔═══════════════════════════╦═══════════════════╗
+   ║ Optuna_Hyperparameter_    			║ Model_train/			       ║
+   ║ searching/                					║ 生产训练           			       ║
+   ║ opt_searching.py          				║ train.py			               ║
+   ║ 多环境 × 多 trial 搜索最优  				║ → model_analysis  		       ║
+   ║ 超参数                     						║ → visualization  		       ║
+   ╚═══════════════════════════╩═══════════════════╝
+                  			     ▼
+   ┌──────────────────────────────────────────────┐
+   │ export_model.py → ONNX → InferenceC++ 部署    				    │
+   └──────────────────────────────────────────────┘
+
+─────────────────────────────────────────────────────────────
+第三部分：Phase 0 — SQL 获取主力合约
+─────────────────────────────────────────────────────────────
+文件：SQL/SQL_PrimaryContract.py
+
+【做了什么】
+  连接 MySQL 数据库（mvtdb），查询 TradeableInstrument 表，
+  获取近 50 天内、品种为 IM%（中证1000股指）、类型为 PRIMARY
+  （主力合约）的交易日和合约代码，写入 Contract.csv。
+
+【关键参数位置】
+  · INSTRUMENT_ID  = 'IM%'          → 第 5 行（改品种）
+  · DATE 往前推 50 天             	    → 第 7 行（改时间范围）
+
+【执行命令】
+  cd SQL
+  python SQL_PrimaryContract.py
+
+【输出】
+  SQL/Contract.csv
+  两列：TradingDay（交易日）、InstrumentID（合约代码）
+
+─────────────────────────────────────────────────────────────
+第四部分：Phase 1 — 数据拉取
+─────────────────────────────────────────────────────────────
+文件：Model_train/data_fetch.py（Optuna_Hyperparameter_searching/
+      data_fetch.py 内容相同）
+
+【做了什么】
+  读取 Contract.csv 中最新的（train + val + 5 天归一化窗口 +
+  3 天样本外）个文件，从远程目录复制原始 L2 行情 CSV 到
+  Data/Raw_data/。
+
+【关键参数位置】
+  · 远程数据源路径                  → config.py 第 2 行 copy_data_path
+  · 合约映射表路径                  → config.py 第 3 行 fetch_file_path
+  · 原始行情输出目录                → config.py 第 4 行 raw_data_path
+  · 需要拉取的文件数量：
+      train_num_files + val_num_files + 5 + 3
+      （5 = 归一化窗口天数，3 = 样本外天数）
+      → data_fetch.py 第 9 行，实际数值来自 config.py
+        第 17 行（train_num_files）和第 19 行（val_num_files）
+
+【执行命令】
+  python data_fetch.py
+
+【输出】
+  Data/Raw_data/*.csv（每个交易日的 L2 行情文件）
+
+─────────────────────────────────────────────────────────────
+第五部分：Phase 2 — Optuna 超参数搜索（核心阶段）
+─────────────────────────────────────────────────────────────
+目录：Optuna_Hyperparameter_searching/
+入口：opt_searching.py
+
+【本阶段目标】
+  在多种"标签窗口 × 标签阈值"组合（称为"环境"）下，用 Optuna
+  贝叶斯优化自动搜索最优超参数组合，最终产出每个环境的最佳
+  超参数 + 评分，供 Phase 3 挑选使用。
+
+【第一步：确认全局配置（config.py）】
+  文件：Optuna_Hyperparameter_searching/config.py
+  数据处理参数：
+    · 第 10 行  label_method = "trend"
+        'trend' = midprice 滚动均值法（默认）
+        'path'  = 三重屏障法（Numba 加速）
+    · 第 11 行  alpha = 1e-4（bps 阈值，作为默认值）
+    · 第 12 行  label_window = 10（标签窗口，会被 Optuna 环境覆盖）
+    · 第 13 行  normalize_window = 5（滚动归一化历史天数）
+  DataLoader 划分：
+    · 第 16 行  train_start_file = 0
+    · 第 17 行  train_num_files = 25（训练集 25 天）
+    · 第 18 行  val_start_file   = 25（验证集起始 = train 结束）
+    · 第 19 行  val_num_files    = 5（验证集 5 天）
+    · 第 20 行  batch_size = 1024
+    · 第 21 行  target_size = 1（预测步长）
+    · 第 22-23 行 shuffle_train / drop_last
+  训练超参（搜索中大部分被 trial 覆盖）：
+    · 第 34 行  num_epochs = 200（每个 trial 最大 epoch）
+    · 第 35 行  learning_rate = 0.001
+    · 第 36 行  weight_decay = 5e-3
+    · 第 37 行  warmup_epochs = 5
+    · 第 56 行  early_stop_patience = 10
+  损失函数固定矩阵（被 trial 动态覆盖）：
+    · 第 42-53 行  gamma / soft_matrix / pnl_matrix
+
+【第二步：确认搜索环境（opt_searching.py -> main()）】
+  文件：Optuna_Hyperparameter_searching/opt_searching.py
+  · 第 156 行  target_windows = [10, 20, 50, 100]
+      （标签窗口扫描列表，想增加/删减窗口在此修改）
+  · 第 157 行  target_alphas = [1.0, 1.5, 2.0, 2.5]
+      （基础 alpha 阈值（bps），按窗口缩放后使用）
+  · 第 162 行  tau = sqrt(lw / 10)
+      （alpha 动态缩放公式，窗口越大阈值越大）
+  · 第 194 行  study.optimize(..., n_trials=50)
+      （每个环境跑 50 个 trial，想减少/增加在此改）
+
+【第三步：确认搜索空间（opt_searching.py -> objective()）】
+  文件：Optuna_Hyperparameter_searching/opt_searching.py
+  · 第 45 行   window_size ∈ [100, 500] step=5（模型历史窗口）
+  · 第 47 行   gamma ∈ [1.2, 3]（Focal Loss 聚焦参数）
+  · 第 49 行   target_conf ∈ [0.85, 0.99]（对角置信度）
+  · 第 50 行   target_conf_mid ∈ [0.85, 0.99]（中间类置信度）
+  · 第 60 行   max_penalty   ∈ [1.0, 3.0]（PnL 惩罚矩阵，副对角线）
+  · 第 61 行   mid_penalty   ∈ [0.1, 2.0] （PnL 惩罚矩阵，错误识别 平稳 状态）
+  · 第 62 行   min_penalty   ∈ [0.1, 1.0] （PnL 惩罚矩阵，将 涨跌 错误识别为 平稳）
+  想固定某个参数：把 trial.suggest_* 改为直接赋值，
+  想扩大/缩小范围：修改上面的上下界。
+
+【第四步：执行搜索】
+  命令（在 Optuna_Hyperparameter_searching/ 目录下）：
+    python opt_searching.py
+
+【程序运行时的先后顺序（main() 内部）】
+  1. 初始化日志（第 154 行）
+  2. 遍历 target_windows（第 160 行）
+      对每个 lw 计算 tau 并缩放 alpha 列表（第 162-163 行）
+  3. 遍历每个缩放后的 alpha（第 166 行）
+     a. 定义环境名 LW_{lw}_Alpha_{alpha}（第 167 行）
+     b. 清空 Processed/Normalized 数据目录（第 170-176 行）
+     c. 调 run_pipeline() 生成该环境的数据
+        （第 179-187 行，内部=特征工程+标签+归一化）
+     d. 创建 Optuna Study（第 189 行）
+     e. 连续跑 50 个 trial（第 194 行）
+     f. 记录该环境最优评分（第 196-197 行）
+  4. 打印所有环境的最终结果（第 198 行）
+
+【如何读懂输出】
+  · 日志文件：Logs/Optuna_Campaign_YYYYMMDD_HHMMSS.log
+  · 每个环境结束时日志会打印：
+      [Done] Env LW_10_Alpha_1.0 Ending Searching.
+             Best Parameters: {...}
+  · 全部跑完后打印：
+      Final Result: {环境名: 最优评分}
+  · 评分 = 验证集 PR-AUC(Down) + PR-AUC(Up)，越高越好，比对PRAUC与原始占比
+
+─────────────────────────────────────────────────────────────
+第六部分：Phase 3 — 生产模型训练（正式训练）
+─────────────────────────────────────────────────────────────
+目录：Model_train/
+入口：train.py
+
+【本阶段目标】
+  用 Phase 2 搜索出的最优超参数，在全部可用数据上正式训练模型，
+  保存最佳权重，供分析和导出。
+
+【第一步：把搜索出的最优参数填入 config.py】
+  文件：Model_train/config.py
+  · 第 12 行  label_method = "trend"
+      （应与 Optuna 搜索时一致）
+  · 第 28 行  window_size = 150
+      ← 重点：改为 Phase 2 搜出的最优 window_size！
+  · 第 43 行  gamma = 2.0
+      ← 改为搜出的最优 gamma
+  · 第 44-48 行 soft_matrix   ← 按 search objective 中
+       target_conf/target_conf_mid 计算后填入
+  · 第 49-53 行 pnl_matrix    ← 按 max/min/mid_penalty
+       填入
+  · 说明：本 config 中没有 alpha / label_window 的搜索值，
+     生产训练默认用第 11 行 alpha = 1e-4 和第 12 行
+     label_window = 10，与搜索最优环境保持一致即可。
+
+【DataLoader 划分（Model_train/config.py，与搜索版略有差异）】
+  · 第 18 行  train_start_file = 0
+  · 第 19 行  train_num_files = 20（训练集 20 天）
+  · 第 20 行  val_start_file   = 20
+  · 第 21 行  val_num_files    = 5（验证集 5 天）
+  · 第 58 行  early_stop_patience = 15
+  · 内置3天OOS样本，在model_analysis中体现
+
+【执行训练（train.py 内部顺序）】
+  1. set_seed(42)（第 196 行）保证可复现
+  2. setup_logger() 初始化日志（第 142 行）
+  3. prepare_data()（第 143 行调用，定义在第 48-68 行）：
+     a. 清空旧 Processed/Normalized 文件（第 50-54 行）
+     b. 校验原始 CSV 存在（第 57-59 行）
+     c. 调 run_pipeline() 生成数据（第 61-66 行）
+  4. train()（第 146 行调用，定义在第 71-195 行）：
+     a. 创建 train/val DataLoader（第 72-83 行）
+     b. 初始化 FE_DeepLOB 模型（第 91-93 行）
+     c. 可选 torch.compile CUDA 加速（第 94-96 行）
+     d. 计算类别权重（第 98-101 行）
+     e. AdamW + 学习率调度（第 103-117 行）
+     f. 两阶段损失：
+        Warmup 阶段（前 warmup_epochs epoch）用
+        CrossEntropyLoss（第 124-128 行）
+        之后切换 SoftFocalLoss（第 129-131 行）
+     g. 每轮训练 + 验证，打印 loss 与 PR-AUC
+        （第 135-153 行）
+     h. 早停：验证 loss 连续 15 epoch 不改善则停
+        （第 154-158 行）
+     i. 模型导出到 Model/cache/best_model.pt（第 163 行）
+        再复制到 Model/torch/{日期}_{lw}_{alpha}bps_{ws}.pt
+        （第 165-172 行）
+
+【执行命令】
+  python train.py
+
+【输出】
+  · 日志：Logs/Train_YYYYMMDD_HHMMSS.log
+  · 模型：Model/cache/best_model.pt（训练中最佳）
+  · 最终：Model/torch/{日期}_{label_window}_{alpha}bps_{window_size}.pt
+
+【训练后分析（可选但推荐）】
+  python model_analysis.py   → 评估与诊断（loss 曲线、混淆矩阵）
+  python visualization.py    → 信号分布、PR 曲线、置信度散点图
+
+─────────────────────────────────────────────────────────────
+第七部分：Phase 4 — 模型导出 ONNX
+─────────────────────────────────────────────────────────────
+目录：Model_train/
+文件：export_model.py
+
+【做了什么】
+  把训练好的 .pt 权重加载到干净模型，导出为 ONNX 格式，
+  供 InferenceC++（C++/ONNX Runtime）推理部署。
+
+【注意】
+  导出前需确认 export_model.py 中的：
+  · 权重路径（.pt 文件位置）
+  · 模型超参数（window_size、num_features 等）与训练时一致
+
+【执行命令】
+  python export_model.py
+
+【输出】
+  Model/onnx/*.onnx
+
+─────────────────────────────────────────────────────────────
+第八部分：参数速查表（想改什么 → 去哪改）
+─────────────────────────────────────────────────────────────
+┌────────────────────────┬───────────────────────────────┬──────────┐
+│ 想调整的内容             				     │ 文件                           						     │ 行号     		   │
+├────────────────────────┼───────────────────────────────┼──────────┤
+│ 品种（IM→其他）          			     │ SQL/SQL_PrimaryContract.py     			     │ 5        		   │
+│ SQL 时间范围（50天）     			     │ SQL/SQL_PrimaryContract.py     			     │ 7        		   │
+│ 远程数据源路径            			     │ (两目录)config.py              					     │ 2        		   │
+│ 合约映射表路径            			     │ (两目录)config.py              					     │ 3       		   │
+│ 原始行情目录              			     │ (两目录)config.py              					     │ 4        	  	   │
+│ 标签方法 trend/path      			     │ (两目录)config.py              				             │ 10       		   │
+│ 标签阈值 alpha           			     │ Optuna: config.py             					     │ 11       	 	   │
+│ 标签窗口 label_window      		     │ Optuna: config.py 默认值       				     │ 12       		   │
+│ 归一化窗口                				     │ (两目录)config.py              					     │ 13       		   │
+│ 训练文件数(搜索版25/生产25)               │ Optuna: config.py        					     │ 17           	   │
+│                          					     │ Model_train: config.py        				     │ 19       		   │
+│ 验证文件数(搜索版5/生产5)  		     │ Optuna: config.py        					     │ 19           	   │
+│                          				    	     │ Model_train: config.py        				     │ 21       		   │
+│ batch_size               				     │ (两目录)config.py              					     │ 20       		   │
+│ window_size(模型历史窗口) 		     │ Optuna 搜索: opt_searching.py  			     │ 45         		   │
+│                           					     │ 生产: Model_train/config.py       			     │ 28       		   │
+│ Optuna 搜索窗口列表       			     │ opt_searching.py              					     │ 156      		   │
+│ Optuna 基础 alpha 列表    		     │ opt_searching.py              					     │ 157      		   │
+│ 每个环境 trial 数(50)     			     │ opt_searching.py              					     │ 194      		   │
+│ gamma 搜索范围            			     │ opt_searching.py              					     │ 47       		   │
+│ soft 矩阵参数搜索范围     			     │ opt_searching.py              					     │ 49-50    		   │
+│ PnL 惩罚矩阵搜索范围      			     │ opt_searching.py              					     │ 60-62    		   │
+│ 训练总 epoch(200)         			     │ (两目录)config.py              					     │ 34       		   │
+│ 学习率 lr                				     │ (两目录)config.py              					     │ 35       		   │
+│ warmup epoch 数          			     │ (两目录)config.py              					     │ 37       		   │
+│ 早停容忍 epoch           			     │ Optuna: config.py              					     │ 56       		   │
+│                          					     │ Model_train: config.py        				     │ 58       		   │
+│ 模型导出路径/文件名        			     │ Model_train/config.py         				     │ 6-7      		   │
+└────────────────────────┴───────────────────────────────┴──────────┘
+
+─────────────────────────────────────────────────────────────
+第九部分：常见问题 & 排错
+─────────────────────────────────────────────────────────────
+1. ModuleNotFoundError: No module named 'torch'
+   → 使用含 PyTorch 的 conda 环境，或按各目录 Run.txt 安装。
+   （本项目依赖 PyTorch CUDA 版，建议 conda 环境安装）
+
+2. data_fetch.py 报 "Missing: ..."
+   → 远程目录中缺少对应交易日的文件，检查 copy_data_path
+     路径结构是否正确（交易日子目录/合约_日期.csv）。
+
+3. process_data.py 报 "label_method must be one of ..."
+   → config.py 的 label_method 必须是 'trend' 或 'path'。
+
+4. dataset.py 报 "Missing required columns ..."
+   → 说明 Processed/Normalized 文件列与 dataset 期望不一致，
+     多半是 process_data.py 被改过、或数据是旧版本生成。
+     删除 Data/FE_DeepLOB_data 后重跑即可。
+
+5. Optuna 搜索很慢
+   → 减小 n_trials（opt_searching.py 第 194 行）
+   → 减小 num_epochs（config.py 第 34 行）
+   → 减小 target_windows / target_alphas 列表
+
+6. 训练不收敛 / loss 异常
+   → 检查 window_size 是否填了搜索出的最优值
+   → 检查 soft_matrix / pnl_matrix 是否与搜索时一致
+   → 确认训练/验证数据划分与搜索时配置一致
+
+─────────────────────────────────────────────────────────────
+文档结束 —— 按 Phase 0 → 4 顺序执行即可
+─────────────────────────────────────────────────────────────

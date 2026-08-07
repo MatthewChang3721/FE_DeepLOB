@@ -1,9 +1,11 @@
 # Data paths
-copy_data_path = "T:/microvast-zx_920/Future/INE/sc"
-fetch_file_path = "Data/Contract.csv"
+copy_data_path = rf"T:\microvast-gtja_984\Future\CFFEX\IM"
+fetch_file_path = "../SQL/Contract.csv"
 raw_data_path = "Data/Raw_data/"
 processed_data_path = "Data/FE_DeepLOB_data/Processed_data/"
 normalized_data_path = "Data/FE_DeepLOB_data/Normalized_data/"
+model_save_dir = "Model/cache"
+model_save_name = "best_model.pt"
 log_dir = "Logs/"
 
 # Data processing
@@ -15,9 +17,9 @@ normalize_window = 5
 # Dataloader split
 train_start_file = 0
 train_num_files = 25
-val_start_file = 25 # val_start_file = train_start_file + train_num_files
+val_start_file = 25
 val_num_files = 5
-batch_size = 1024  # 1024 is a normal batch size, and can be larger, depends on GPU.
+batch_size = 1024
 target_size = 1
 shuffle_train = True
 drop_last = True
@@ -53,6 +55,6 @@ pnl_matrix = [
 ]
 
 # Early stopping
-early_stop_patience = 10
+early_stop_patience = 15
 early_stop_verbose = False
 monitor_loss = True

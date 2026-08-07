@@ -4,7 +4,7 @@ from datetime import datetime,timedelta
 
 INSTRUMENT_ID = 'IM%'
 TODAY = datetime.now().date()
-DATE = TODAY - timedelta(days = 50)
+DATE = TODAY - timedelta(days = 60)
 TODAY = TODAY.strftime(r'%Y-%m-%d')
 DATE = DATE.strftime(r'%Y-%m-%d')
 
