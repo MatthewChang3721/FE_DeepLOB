@@ -24,12 +24,7 @@ def export_to_onnx(pt_filename: str):
     
     # 按照 train_engine 中的顺序构造 4 个输入
     # 注意：这里的 C_m, C_p, C_l, C_s 需要替换为你真实数据各模态的通道数
-    dummy_momentum = torch.randn(batch_size, T, 1)  # 示例通道数 10
-    dummy_pic = torch.randn(batch_size, T, 10)        # 示例通道数 5
-    dummy_lt = torch.randn(batch_size, T, 1)         # 示例通道数 3
-    dummy_st = torch.randn(batch_size, T, 2)         # 示例通道数 3
-    
-    dummy_inputs = (dummy_momentum, dummy_pic, dummy_lt, dummy_st)
+    # dummy_inputs
 
     date_str = datetime.now().strftime("%Y%m%d")
     alpha_bps = config.alpha * 1e4
@@ -49,7 +44,7 @@ def export_to_onnx(pt_filename: str):
         do_constant_folding=True,   # 开启常量折叠优化（把能提前算好的常数直接算好，提升 C++ 速度）
         
         # 定义输入和输出的节点名称 (C++ 代码中需要通过这些字符串名字来填入数据)
-        input_names=['momentum', 'pic', 'lt_sensor', 'st_sensor'],
+        input_names=[],
         output_names=['logits'],
     )
     print(f"Done! Onnx Model Saved to -> {onnx_file_path}")
