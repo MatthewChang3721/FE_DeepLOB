@@ -4,36 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SoftFocalLoss(nn.Module):
-    def __init__(self, soft_targets, penalty_matrix, weight = None, gamma = 2.0, reduction = 'mean', device = 'cuda'):
-        super(SoftFocalLoss,self).__init__()
-        self.weight = weight
-        self.gamma = gamma
-        self.reduction = reduction
-        
-        soft_tensor = torch.tensor(soft_targets, dtype=torch.float32)
-        self.register_buffer('soft_targets', soft_tensor.to(device))
-
-        pnl_tensor = torch.tensor(penalty_matrix, dtype = torch.float32)
-        self.register_buffer('penalty_matrix', pnl_tensor.to(device))
-
-    def forward(self, logits, labels):
-        targets = self.soft_targets[labels]
-        ce_loss =  F.cross_entropy(logits, targets, weight = self.weight, reduction = 'none')
-        probs = F.softmax(logits, dim = 1)
-        
-        pt = (probs * targets).sum(dim = 1)
-        focal_loss = ((1-pt) ** self.gamma) * ce_loss
-
-        batch_penalty = self.penalty_matrix[labels]
-        expected_penalty = (probs * batch_penalty).sum(dim = 1)
-
-        total_loss = focal_loss * (1.0 + expected_penalty)
-
-        if self.reduction == 'mean':
-            return total_loss.mean()
-        elif self.reduction == 'sum':
-            return total_loss.sum()
-        else:
+    # Proprietary core algorithm redacted for confidentiality.
             return total_loss
         
 class EarlyStopping:
