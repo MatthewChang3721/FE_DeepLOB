@@ -137,24 +137,7 @@ python train.py
 
 **Model architecture** (forward pass):
 
-```
-Input (4 modalities)
-    │
-    ├── Momentum ──→ Causal Conv Blocks ──→
-    ├── Snapshot ──→ Conv + Causal Conv + Inception ──→
-    ├── LT Sensor ──→ Dilated Causal Conv ──→
-    └── ST Sensor ──→ (direct concatenation)
-                           │
-                      Concatenate → LSTM
-                           │
-                      Linear → Logits
-```
-
-This file also contains:
-- `train_engine()` — training loop
-- `validate_engine()` — validation loop, returns loss + Down/Up PR-AUC
-
----
+Proprietary structure redacted for confidentiality.
 
 ### `export_model.py` — ONNX Export
 
@@ -170,8 +153,6 @@ python export_model.py
 
 ### `dataset.py` — Sliding Window Dataset
 
-- `TimeSeriesDataset`: extracts multiple input modalities from data via a sliding window; **accesses features by column name** (not positional index) with schema validation — missing/unexpected columns raise a clear error
-- Four named feature groups: `momentum` (MidPrice_diff), `pic` (Bid_G1..Ask_G5), `lt_sensor` (MidPrice), `st_sensor` (OBI_3, OBI_delta)
 - `create_dataloader()`: reads normalized files and returns a `DataLoader`; performs bounds-checking on the requested file range
 
 ### `data_fetch.py` — Data Fetching
@@ -183,9 +164,6 @@ python data_fetch.py
 ```
 
 ### `train_artifact.py` — Training Utilities
-
-- **Custom loss function**: combines soft labels with a PnL penalty matrix
-- **`EarlyStopping`**: early stopping mechanism
 
 ---
 
