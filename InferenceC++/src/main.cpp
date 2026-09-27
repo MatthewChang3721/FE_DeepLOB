@@ -7,13 +7,7 @@
 #include <chrono>
 
 // 全局常量：模型输入维度配置
-const int64_t BATCH_SIZE = 1;  
-const int64_t TIME_STEPS = 150;
-    
-const int64_t C_MOMENTUM = 1;  // 中间价差分
-const int64_t C_PIC = 10;      // 五档价格引力 x 双向
-const int64_t C_LT = 1;        // 中间价5日归一化
-const int64_t C_ST = 2;        // OBI3 & OBI(5-3)
+// Proprietary core algorithm redacted for confidentiality.
 
 // ONNX 推理引擎封装类
 class ModelEngine {
@@ -97,26 +91,7 @@ bool load_csv_data(
         std::stringstream ss(line);
         std::string cell;
         
-        for (int i = 0; i < 1; ++i) {
-            std::getline(ss, cell, ',');
-            out_momentum[current_time_step * 1 + i] = std::stof(cell);
-        }
-        // 读取 PIC（10列）
-        for (int i = 0; i < 10; ++i) {
-            std::getline(ss, cell, ',');
-            out_pic[current_time_step * 10 + i] = std::stof(cell);
-        }
-        // 读取 LT（1列）
-        for (int i = 0; i < 1; ++i) {
-            std::getline(ss, cell, ',');
-            out_lt[current_time_step * 1 + i] = std::stof(cell);
-        }
-        // 读取 ST（2列）
-        for (int i = 0; i < 2; ++i) {
-            std::getline(ss, cell, ',');
-            out_st[current_time_step * 2 + i] = std::stof(cell);  
-        }
-        current_time_step++;
+        // Proprietary core algorithm redacted for confidentiality.
     }
     if (current_time_step < 150) {
         std::cerr << "Lacking of Data" << std::endl;
