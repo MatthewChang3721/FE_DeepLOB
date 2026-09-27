@@ -10,12 +10,7 @@ DATE = DATE.strftime(r'%Y-%m-%d')
 
 
 conn = pymysql.connect(
-        host = '192.168.1.118',
-        user = 'replay1',
-        password = 'replayMvt*',
-        database = 'mvtdb',
-        port = 3306,
-        ssl_disabled=True
+ #Proprietary core algorithm redacted for confidentiality.
     )
 sql = f"""
         SELECT
