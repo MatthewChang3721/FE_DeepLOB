@@ -137,26 +137,7 @@ python train.py
 
 ### `FE_DeepLOB.py` — 模型定义
 
-**模型架构**（按 forward 顺序）：
-
-```
-Input (4 modalities)
-    │
-    ├── Momentum ──→ Causal Conv Blocks ──→
-    ├── Snapshot ──→ Conv + Causal Conv + Inception ──→
-    ├── LT Sensor ──→ Dilated Causal Conv ──→
-    └── ST Sensor ──→ (direct concatenation)
-                           │
-                      Concatenate → LSTM
-                           │
-                      Linear → Logits
-```
-
-此文件还包含：
-- `train_engine()` — 训练循环
-- `validate_engine()` — 验证循环，返回 loss + Down/Up 的 PR-AUC
-
----
+公司资产，无法展示
 
 ### `export_model.py` — ONNX 导出
 
@@ -171,9 +152,6 @@ python export_model.py
 ---
 
 ### `dataset.py` — 滑动窗口数据集
-
-- `TimeSeriesDataset`：以滑动窗口方式从数据中切分多个输入模态；**按列名（而非位置索引）访问特征**，并带 schema 校验——必需列缺失或出现未知列时立即抛出明确错误
-- 四组命名特征：`momentum`（MidPrice_diff）、`pic`（Bid_G1..Ask_G5）、`lt_sensor`（MidPrice）、`st_sensor`（OBI_3, OBI_delta）
 - `create_dataloader()`：读入多个归一化文件，返回 `DataLoader`；对请求的文件范围做越界检查
 
 ### `data_fetch.py` — 数据拉取
@@ -185,9 +163,6 @@ python data_fetch.py
 ```
 
 ### `train_artifact.py` — 训练辅助模块
-
-- **自定义损失函数**：结合 soft label 和 PnL 惩罚矩阵
-- **`EarlyStopping`**：早停机制
 
 ---
 
